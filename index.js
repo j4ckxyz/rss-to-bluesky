@@ -30,29 +30,98 @@ async function getFeedsWithRetry(url, maxRetries = 3) {
 
 async function post(agent, item) {
     try {
-        let post = {
-            $type: "app.bsky.feed.post",
-            text: item.title,
-            createdAt: new Date().toISOString(),
-        };
-
-        const replyText = `Source: ${item.link}`;
-        post.text = `${item.title}\n\n${replyText}`;
-
-        const res = AppBskyFeedPost.validateRecord(post);
-        if (res.success) {
-            console.log("Posting:", post.text);
-            await agent.post(post);
-            return true;
-        } else {
-            console.error("Post validation failed:", res.error);
-            return false;
+      let post = {
+        $type: "app.bsky.feed.post",
+        text: item.title,
+        createdAt: new Date().toISOString(),
+      };
+  
+      // Fetch and parse the webpage
+      const response = await fetch(item.link);
+      const html = await response.text();
+      const dom = cheerio.load(html);
+  
+      // Get metadata
+      let description = null;
+      const description_ = dom('head > meta[property="og:description"]');
+      if (description_) {
+        description = description_.attr("content");
+      }
+  
+      // Get image
+      let image_url = null;
+      const image_url_ = dom('head > meta[property="og:image"]');
+      if (image_url_) {
+        image_url = image_url_.attr("content");
+      }
+  
+      if (image_url) {
+        try {
+          // Process and upload image
+          const imageResponse = await fetch(image_url);
+          const buffer = await imageResponse.arrayBuffer();
+          const processedImage = await sharp(Buffer.from(buffer))
+            .resize(800, null, {
+              fit: "inside",
+              withoutEnlargement: true,
+            })
+            .jpeg({
+              quality: 80,
+              progressive: true,
+            })
+            .toBuffer();
+  
+          const uploadedImage = await agent.uploadBlob(processedImage, { encoding: "image/jpeg" });
+  
+          // Add embed with image
+          post.embed = {
+            $type: "app.bsky.embed.external",
+            external: {
+              uri: item.link,
+              title: item.title,
+              description: description,
+              thumb: uploadedImage.data.blob,
+            }
+          };
+        } catch (imageError) {
+          console.error("Error processing image:", imageError);
+          // Continue without image if there's an error
+          post.embed = {
+            $type: "app.bsky.embed.external",
+            external: {
+              uri: item.link,
+              title: item.title,
+              description: description
+            }
+          };
         }
-    } catch (error) {
-        console.error("Error posting to Bluesky:", error);
+      } else {
+        // No image, just add link embed
+        post.embed = {
+          $type: "app.bsky.embed.external",
+          external: {
+            uri: item.link,
+            title: item.title,
+            description: description
+          }
+        };
+      }
+  
+      const res = AppBskyFeedPost.validateRecord(post);
+      if (res.success) {
+        console.log("Posting:", post.text);
+        await agent.post(post);
+        return true;
+      } else {
+        console.error("Post validation failed:", res.error);
         return false;
+      }
+    } catch (error) {
+      console.error("Error posting to Bluesky:", error);
+      return false;
     }
-}
+  }
+  
 
 async function getProcessedPosts(agent, account) {
     const processed = new Set();

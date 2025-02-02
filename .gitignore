@@ -1,3 +1,14 @@
+# Dependencies
 node_modules/
+logs/
+
+# Configuration
 config.js
+.env
+
+# Logs
 *.log
+npm-debug.log*
+
+# PM2
+.pm2/
