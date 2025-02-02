@@ -136,17 +136,3 @@ Run the test script to verify your configuration:
 ```bash
 node test.js
 ```
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-```
-
-This format:
-- Has consistent heading levels
-- Groups related information
-- Uses proper markdown formatting
-- Is easier to read and follow
-- Includes all necessary information in a logical order
-
-Would you like me to adjust anything else?
